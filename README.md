@@ -1,18 +1,19 @@
-# 🤖 R5D2 Robot Platform
+# R5D2 Robot Platform 🛠️
 
-A modular **Raspberry Pi + Arduino** robot built for outdoor navigation, motor control, and data logging.  
-This repo includes firmware, Python control servers, and detailed wiring for the full hardware stack.
+Modular ESP32-based robot firmware and utilities for outdoor navigation, motor control, and sensor integration.
+
+![GitHub stars](https://img.shields.io/github/stars/smeschke/robot)
+![GitHub license](https://img.shields.io/github/license/smeschke/robot)
 
 ---
 
-## 🧩 Project Overview
+## 🚀 What is R5D2?
 
-**R5D2** (RoboVac × 5 scale) is a 2-wheel-drive robot platform featuring:
+This project contains firmware and utilities for a modular robot using an ESP32 microcontroller. It supports motor drivers, IMU sensor input, and logging for autonomous or tele-operated applications.
 
-- 🧠 ESP32
-- ⚙️ Dual BTS7960 H-bridge motor drivers  
-- 🦯 GY-521 / MPU6050 IMU  
-- 🔋 Dual 12 V brushed DC motors
-- 🔌 12 V SLA Battery for Motors
-- 🔌 5 V LiPo Battery for Compute
-- Lights
+## 🔧 Features
+
+- ESP32 motor control code
+- Dual BTS7960 H-bridge support
+- IMU (GY-521/MPU6050) integration
+- Logging utilities
