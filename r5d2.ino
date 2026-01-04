@@ -5,6 +5,10 @@
 #include <MPU6050_light.h>
 #include "esp_task_wdt.h"
 
+// ================= Relay pin =================
+#define RELAY_PIN 32
+bool relayOn = false;
+
 
 // ================= IMU =================
 MPU6050 mpu(Wire);
@@ -23,10 +27,10 @@ float HEADING_KP = 3.0;
 float HEADING_DEADBAND = 1.0;
 
 // ================= Motor pins =================
-#define L_RPWM 33
-#define L_LPWM 27
-#define R_RPWM 26
-#define R_LPWM 25
+#define R_RPWM 33
+#define R_LPWM 27
+#define L_RPWM 26
+#define L_LPWM 25
 
 // ================= Motion state =================
 int curL = 0, curR = 0;
@@ -39,7 +43,7 @@ unsigned long RAMP_DT = 25;
 unsigned long lastRamp = 0;
 
 // ================= Drive flags =================
-bool driveF=false, driveB=false, driveL=false, driveR=false;
+bool driveF = false, driveB = false, driveL = false, driveR = false;
 
 // ================= Failsafes =================
 unsigned long lastCmdMs = 0;
@@ -48,7 +52,7 @@ const unsigned long IMU_TIMEOUT_MS = 50;    // IMU health
 
 // ================= Wi-Fi =================
 WebServer server(80);
-const char* ssid = "R5D2";
+const char* ssid = "r5d2";
 
 // ================= DRIVE PAGE (PROGMEM) =================
 const char DRIVE_HTML[] PROGMEM = R"rawliteral(
@@ -68,6 +72,14 @@ const char DRIVE_HTML[] PROGMEM = R"rawliteral(
 </head>
 <body>
 <h1>R5D2</h1>
+
+
+
+<button class='btn gold'
+  onclick="fetch('/relay/toggle')">
+RELAY
+</button>
+
 
 <div>
   <button class='btn lr'
@@ -234,19 +246,40 @@ void handleParamsGet() {
   server.send(200, "application/json", buf);
 }
 
+
+
+void handleRelayToggle() {
+  lastCmdMs = millis();
+
+  relayOn = !relayOn;
+
+  if (relayOn) {
+    digitalWrite(RELAY_PIN, LOW);   // LOW = ON (LOW-trigger relay)
+  } else {
+    digitalWrite(RELAY_PIN, HIGH);  // HIGH = OFF
+  }
+
+  server.send(200, "text/plain", relayOn ? "RELAY ON" : "RELAY OFF");
+}
+
+
+
 // ================= Setup =================
 void setup() {
   Serial.begin(115200);
 
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, HIGH);  // relay OFF at boot
+  relayOn = false;
 
-esp_task_wdt_config_t wdt_config = {
-  .timeout_ms = 5000,        // 5 seconds
-  .idle_core_mask = (1 << 0) | (1 << 1),  // monitor both cores
-  .trigger_panic = true      // reset on timeout
-};
+  esp_task_wdt_config_t wdt_config = {
+    .timeout_ms = 5000,        // 5 seconds
+    .idle_core_mask = (1 << 0) | (1 << 1),  // monitor both cores
+    .trigger_panic = true      // reset on timeout
+  };
 
-esp_task_wdt_init(&wdt_config);
-esp_task_wdt_add(NULL);      // add current task (loop task)
+  esp_task_wdt_init(&wdt_config);
+  esp_task_wdt_add(NULL);      // add current task (loop task)
 
   pinMode(L_RPWM,OUTPUT); pinMode(L_LPWM,OUTPUT);
   pinMode(R_RPWM,OUTPUT); pinMode(R_LPWM,OUTPUT);
@@ -272,6 +305,7 @@ esp_task_wdt_add(NULL);      // add current task (loop task)
   server.on("/L/on",handleDrive); server.on("/L/off",handleDrive);
   server.on("/R/on",handleDrive); server.on("/R/off",handleDrive);
   server.on("/G/on",handleDrive); server.on("/G/off",handleDrive);
+  server.on("/relay/toggle", handleRelayToggle);
 
   // Params readback (JSON; fixed buffer)
   server.on("/params/get", handleParamsGet);
@@ -328,12 +362,11 @@ void loop() {
   }
 
   // ---- Optional health print (uncomment to debug long-run stability) ----
-  
   static unsigned long lastPrint = 0;
   if (millis() - lastPrint > 5000) {
     lastPrint = millis();
     Serial.print("heap=");
     Serial.println(ESP.getFreeHeap());
   }
-  
+    
 }
