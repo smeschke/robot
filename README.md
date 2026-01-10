@@ -10,7 +10,7 @@ It uses two large powered wheels and a rear caster—similar in spirit to a robo
 
 I chose 10-inch pneumatic tires so the robot can handle sidewalks, ramps, and grass reliably without suspension. The motors, gearboxes, and battery come from ride-on toys—they’re inexpensive, readily available, and deliver excellent torque at low speeds.
 
-The robot is controlled by an ESP32 running a built-in web server, allowing manual control from any phone or computer through a simple browser interface—no app required.
+The robot is controlled by an ESP32. The ESP32 can run a built-in web server, allowing manual control from any phone or computer through a simple browser interface—no app or extra hardware required. The ESP32 can also be connected to a Raspberry Pi and recieve commands serially over usb.
 
 🔧 Technical Snapshot
 
