@@ -257,25 +257,53 @@ This document defines the complete v1.0 interface and may be used directly for f
 ## 12. ESP32 Motion State Diagram (Mermaid)
 
 ```mermaid
-stateDiagram-v2
-    [*] --> IDLE
+flowchart LR
+    %% =====================
+    %% RASPBERRY PI
+    %% =====================
+    subgraph PI["Raspberry Pi (High-Level Control)"]
+        UI[GUI / Script\n(Tkinter / OpenCV / CLI)]
+        Planner[Behavior / Path Logic\n(Boustrophedon, Tests)]
+        CmdGen[Command Generator\nRUN / TURN / PWM / STOP]
+        Watchdog[Command Refresh\n&lt; 5s watchdog]
+    end
 
-    IDLE --> RUNNING : RUN
-    IDLE --> TURNING : TURN
-    IDLE --> PWM_RAW : PWM
+    %% =====================
+    %% ESP32
+    %% =====================
+    subgraph ESP["ESP32 (Real-Time Motor Controller)"]
+        Serial[Serial Parser]
+        State[State Machine\nIDLE / RUN / TURN / PWM / STOP]
 
-    RUNNING --> STOPPING : STOP
-    TURNING --> STOPPING : STOP
-    PWM_RAW --> STOPPING : STOP
+        subgraph Control["Fast Control Loop (~1–2 kHz)"]
+            IMU[MPU6050 IMU\nYaw Integration]
+            Error[Heading Error\n(target − yaw)]
+            RUNPID[RUN Heading Hold\nP-control]
+            TURNPID[TURN To Heading\nP + Deadband]
+        end
 
-    RUNNING --> STOPPING : Watchdog Timeout
-    TURNING --> STOPPING : Watchdog Timeout
-    PWM_RAW --> STOPPING : Watchdog Timeout
+        Ramp[Always-On Motor Ramping]
+        Motors[Differential Drive\nLeft / Right Motors]
+        Safety[Watchdog Timeout\nFailsafe STOP]
+    end
 
-    TURNING --> STOPPING : Turn Complete / DONE TURN
+    %% =====================
+    %% CONNECTIONS
+    %% =====================
+    UI --> Planner
+    Planner --> CmdGen
+    CmdGen -->|Serial Commands| Serial
+    Watchdog --> CmdGen
 
-    STOPPING --> IDLE : Ramp Complete
+    Serial --> State
+    State --> Control
+    IMU --> Error
+    Error --> RUNPID
+    Error --> TURNPID
 
-    RUNNING --> RUNNING : RUN (refresh)
-    PWM_RAW --> PWM_RAW : PWM (refresh)
-    TURNING --> TURNING : TURN (refresh)
+    RUNPID --> Ramp
+    TURNPID --> Ramp
+    Ramp --> Motors
+
+    Serial -->|IMU?| IMU
+    Safety --> Ramp
