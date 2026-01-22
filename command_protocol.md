@@ -258,52 +258,50 @@ This document defines the complete v1.0 interface and may be used directly for f
 
 ```mermaid
 flowchart LR
-    %% =====================
-    %% RASPBERRY PI
-    %% =====================
-    subgraph PI["Raspberry Pi (High-Level Control)"]
-        UI[GUI / Script\n(Tkinter / OpenCV / CLI)]
-        Planner[Behavior / Path Logic\n(Boustrophedon, Tests)]
-        CmdGen[Command Generator\nRUN / TURN / PWM / STOP]
-        Watchdog[Command Refresh\n&lt; 5s watchdog]
+
+  %% =====================
+  %% RASPBERRY PI
+  %% =====================
+  subgraph PI["Raspberry Pi<br/>High-level intent"]
+    UI["GUI or Script<br/>Tkinter, OpenCV, CLI"]
+    Planner["Behavior and Path Logic<br/>Boustrophedon, Tests"]
+    CmdGen["Command Generator<br/>RUN, TURN, PWM, STOP"]
+    Refresh["Command Refresh<br/>keepalive under watchdog"]
+    UI --> Planner --> CmdGen
+    Refresh --> CmdGen
+  end
+
+  %% =====================
+  %% ESP32
+  %% =====================
+  subgraph ESP["ESP32<br/>Real-time control"]
+    Serial["Serial Parser"]
+    State["State Machine<br/>IDLE, RUN, TURN, PWM, STOP"]
+
+    subgraph Fast["Fast loop<br/>IMU and control"]
+      IMU["MPU6050 IMU<br/>Yaw estimate"]
+      Err["Heading Error<br/>target minus yaw"]
+      RunCtl["RUN Heading Hold<br/>P control"]
+      TurnCtl["TURN To Heading<br/>P control plus deadband"]
+      IMU --> Err
+      Err --> RunCtl
+      Err --> TurnCtl
     end
 
-    %% =====================
-    %% ESP32
-    %% =====================
-    subgraph ESP["ESP32 (Real-Time Motor Controller)"]
-        Serial[Serial Parser]
-        State[State Machine\nIDLE / RUN / TURN / PWM / STOP]
-
-        subgraph Control["Fast Control Loop (~1–2 kHz)"]
-            IMU[MPU6050 IMU\nYaw Integration]
-            Error[Heading Error\n(target − yaw)]
-            RUNPID[RUN Heading Hold\nP-control]
-            TURNPID[TURN To Heading\nP + Deadband]
-        end
-
-        Ramp[Always-On Motor Ramping]
-        Motors[Differential Drive\nLeft / Right Motors]
-        Safety[Watchdog Timeout\nFailsafe STOP]
-    end
-
-    %% =====================
-    %% CONNECTIONS
-    %% =====================
-    UI --> Planner
-    Planner --> CmdGen
-    CmdGen -->|Serial Commands| Serial
-    Watchdog --> CmdGen
+    Ramp["Always-on Motor Ramping"]
+    Motors["Differential Drive Motors<br/>Left and Right"]
+    Safety["Watchdog Timeout<br/>failsafe STOP"]
 
     Serial --> State
-    State --> Control
-    IMU --> Error
-    Error --> RUNPID
-    Error --> TURNPID
-
-    RUNPID --> Ramp
-    TURNPID --> Ramp
+    State --> Fast
+    RunCtl --> Ramp
+    TurnCtl --> Ramp
     Ramp --> Motors
-
-    Serial -->|IMU?| IMU
     Safety --> Ramp
+  end
+
+  %% =====================
+  %% CONNECTIONS
+  %% =====================
+  CmdGen -->|"Serial commands"| Serial
+  Serial -->|"IMU query"| IMU
