@@ -1,5 +1,5 @@
 // ======================================================
-// R5D2 ESP32 – Simple Always-Ramped Controller
+// R5D2 ESP32 – Always-Ramped Controller w/ Debounced E-STOP
 // ======================================================
 
 #include <Wire.h>
@@ -10,6 +10,8 @@
 #define R_REV 26
 #define L_FWD 27
 #define L_REV 33
+
+#define ESTOP_PIN 14   // 32 or 33 also excellent
 
 #define PWM_MAX 255
 
@@ -35,7 +37,19 @@ float turn_deadband = 2.0;
 // ---------------- MOTOR (ALWAYS RAMPED) ----------------
 int cur_L = 0, cur_R = 0;
 int tgt_L = 0, tgt_R = 0;
+
 const int RAMP_STEP = 1;
+const uint32_t RAMP_INTERVAL_MS = 5;
+uint32_t last_ramp_ms = 0;
+
+// ---------------- E-STOP (PROVEN DEBOUNCER) ----------------
+const uint32_t ESTOP_DEBOUNCE_MS = 30;
+
+bool estop_latched = false;
+
+bool estop_state = false;        // debounced state (true = pressed)
+bool estop_candidate = false;    // raw candidate
+uint32_t estop_change_ms = 0;
 
 // ---------------- UTILS ----------------
 float wrap180(float a) {
@@ -79,14 +93,19 @@ float yawDeg() {
 // ---------------- COMMANDS ----------------
 String rx;
 
-void stop(bool timeout) {
+void stop(bool timeout, bool estop=false) {
   mode = STOP;
   tgt_L = 0;
   tgt_R = 0;
-  Serial.println(timeout ? "TIMEOUT STOP" : "ACK STOP");
+
+  if (estop)        Serial.println("ESTOP HIT");
+  else if (timeout) Serial.println("TIMEOUT STOP");
+  else              Serial.println("ACK STOP");
 }
 
 void handleCommand(String s) {
+  if (estop_latched) return;  // ignore commands during E-STOP
+
   s.trim();
   if (!s.length()) return;
 
@@ -133,7 +152,7 @@ void handleCommand(String s) {
     char key[20];
     float val;
     sscanf(s.c_str(), "SET %s %f", key, &val);
-    if (!strcmp(key, "RUN_KP")) run_kp = val;
+    if      (!strcmp(key, "RUN_KP")) run_kp = val;
     else if (!strcmp(key, "TURN_KP")) turn_kp = val;
     else if (!strcmp(key, "TURN_DEADBAND")) turn_deadband = val;
     else { Serial.println("ERR SET"); return; }
@@ -144,7 +163,7 @@ void handleCommand(String s) {
   Serial.println("ERR");
 }
 
-// ---------------- LOOP ----------------
+// ---------------- SETUP ----------------
 void setup() {
   Serial.begin(115200);
   Wire.begin();
@@ -153,6 +172,8 @@ void setup() {
   pinMode(L_REV, OUTPUT);
   pinMode(R_FWD, OUTPUT);
   pinMode(R_REV, OUTPUT);
+
+  pinMode(ESTOP_PIN, INPUT_PULLUP);
 
   analogWrite(L_FWD, 0);
   analogWrite(L_REV, 0);
@@ -163,10 +184,18 @@ void setup() {
   imu.calcOffsets(true, true);
   yaw_offset = imu.getAngleZ();
 
+  // --- initialize E-STOP debouncer from real pin ---
+  bool raw = (digitalRead(ESTOP_PIN) == LOW);
+  estop_state = raw;
+  estop_candidate = raw;
+  estop_change_ms = millis();
+  estop_latched = raw;
+
   last_cmd_ms = millis();
   Serial.println("READY");
 }
 
+// ---------------- LOOP ----------------
 void loop() {
   // ---- Serial ----
   while (Serial.available()) {
@@ -181,42 +210,77 @@ void loop() {
 
   imu.update();
 
+  // ---- E-STOP (debounced) ----
+  bool raw = (digitalRead(ESTOP_PIN) == LOW);
+
+  if (raw != estop_candidate) {
+    estop_candidate = raw;
+    estop_change_ms = millis();
+  }
+
+  if ((millis() - estop_change_ms) >= ESTOP_DEBOUNCE_MS) {
+    if (estop_state != estop_candidate) {
+      estop_state = estop_candidate;
+
+      if (estop_state) {
+        estop_latched = true;
+        stop(false, true);   // ESTOP HIT
+      } else {
+        estop_latched = false;
+        Serial.println("ESTOP RELEASED");
+        mode = IDLE;
+      }
+    }
+  }
+
   // ---- Watchdog ----
-  if (mode != IDLE && mode != STOP &&
+  if (!estop_latched &&
+      mode != IDLE && mode != STOP &&
       millis() - last_cmd_ms > WATCHDOG_MS) {
     stop(true);
   }
 
   // ---- Target computation ----
-  float err = wrap180(yawDeg()-target_heading);
+  float err = wrap180(yawDeg() - target_heading);
 
-  if (mode == RUN) {
-    int trim = clampi((int)(run_kp * err));
-    tgt_L = clampi(run_speed + trim);
-    tgt_R = clampi(run_speed - trim);
-  }
-
-  else if (mode == TURN) {
-    if (abs(err) <= turn_deadband) {
-      Serial.print("DONE TURN ");
-      Serial.println(yawDeg(), 2);
-      stop(false);
-    } else {
-      int pwm = clampi((int)(turn_kp * err));
-      if (abs(pwm) < 30) pwm = (pwm > 0 ? 30 : -30);
-      tgt_L =  pwm;
-      tgt_R = -pwm;
+  if (!estop_latched) {
+    if (mode == RUN) {
+      int trim = clampi((int)(run_kp * err));
+      tgt_L = clampi(run_speed + trim);
+      tgt_R = clampi(run_speed - trim);
     }
-  }
 
-  else if (mode == IDLE || mode == STOP) {
+    else if (mode == TURN) {
+      if (abs(err) <= turn_deadband) {
+        stop(false);
+        mode = IDLE;
+        Serial.print("DONE TURN ");
+        Serial.println(yawDeg(), 2);
+      } else {
+        int pwm = clampi((int)(turn_kp * err));
+        if (abs(pwm) < 30) pwm = (pwm > 0 ? 30 : -30);
+        tgt_L =  pwm;
+        tgt_R = -pwm;
+      }
+    }
+
+    else {
+      tgt_L = 0;
+      tgt_R = 0;
+    }
+  } else {
     tgt_L = 0;
     tgt_R = 0;
   }
 
   // ---- Always ramp ----
-  cur_L = ramp(cur_L, tgt_L);
-  cur_R = ramp(cur_R, tgt_R);
+  uint32_t now = millis();
+  if (now - last_ramp_ms >= RAMP_INTERVAL_MS) {
+    last_ramp_ms = now;
+    cur_L = ramp(cur_L, tgt_L);
+    cur_R = ramp(cur_R, tgt_R);
+  }
+
   applyMotors();
 
   if (mode == STOP && cur_L == 0 && cur_R == 0)
