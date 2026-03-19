@@ -1,10 +1,8 @@
-R5D2 Robot Platform 🛠️
+Robot Platform 🛠️
 
 Modular ESP32-based robot platform for outdoor navigation, motor control, and sensor integration.
 
-🚀 What is R5D2?
-
-R5D2 is a human-scale, differential-drive utility robot designed to move comfortably through real-world, ADA-compliant spaces at walking speed.
+This is a human-scale, differential-drive utility robot designed to move comfortably through real-world, ADA-compliant spaces at walking speed.
 
 I chose 10-inch pneumatic tires so the robot can handle sidewalks, ramps, and grass reliably without suspension. The motors, gearboxes, and battery come from ride-on toys—they’re inexpensive, readily available, and deliver excellent torque at low speeds.
 
@@ -23,6 +21,6 @@ moving reliably through real, accessible environments while supporting basic sen
 
 Everything above that base is modular.
 
-You could add heavier compute, a camera mast, a vacuum or lawn tool, a sensor package, or even a robotic arm. The platform stays the same—the attachment defines the job.
+You could add heavier compute, a camera mast, a vacuum or lawn tool, a sensor package, a trailer, or even a robotic arm. The platform stays the same—the attachment defines the job.
 
 What task or problem would a robot like this solve for you?
