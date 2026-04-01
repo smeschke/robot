@@ -1,4 +1,4 @@
-// ===== R5D2 Robot: ESP-NOW Receiver + Speed Select =====
+// ===== R5D2 Robot: ESP-NOW Receiver =====
 #include <WiFi.h>
 #include <esp_now.h>
 
@@ -12,18 +12,10 @@
 #define FR_LPWM 19
 #define FR_RPWM 18
 
-// ================= Speed Levels =================
-const int speedLevels[] = {60, 120, 255};
-const int NUM_SPEEDS = 3;
-int speedIndex = 0;           // start at slowest
-int speedLimit = speedLevels[speedIndex];
-
 // ================= Settings =================
 int rampStep   = 1;
-uint32_t rampDtMs = 5;
+uint32_t rampDtMs = 3;
 
-int joyDeadband = 40;
-float joyExpo   = 1.0f;
 
 const uint32_t JOY_TIMEOUT_MS = 300;
 
@@ -33,8 +25,6 @@ int tgtL = 0, tgtR = 0;
 
 volatile int throttleCmd = 0;
 volatile int turnCmd     = 0;
-volatile bool buttonCmd  = false;
-bool lastButtonState = false;
 
 volatile uint32_t lastJoyMs = 0;
 uint32_t lastRampMs = 0;
@@ -43,26 +33,10 @@ uint32_t lastRampMs = 0;
 typedef struct __attribute__((packed)) {
   uint16_t x;
   uint16_t y;
-  bool button;
   uint32_t seq;
   uint32_t ms;
 } JoyPacket;
 
-// ================= Helpers =================
-static inline float sgn(float v) {
-  return (v < 0) ? -1.0f : 1.0f;
-}
-
-int applyDeadbandExpo(int v, int deadband, float expo) {
-  int av = abs(v);
-  if (av <= deadband) return 0;
-
-  float mag = (float)(av - deadband) / (2048.0f - (float)deadband);
-  mag = constrain(mag, 0.0f, 1.0f);
-  mag = powf(mag, expo);
-
-  return (int)(mag * 255.0f * sgn((float)v));
-}
 
 void setAll(int l, int r) {
   l = constrain(l, -255, 255);
@@ -99,8 +73,8 @@ void mixToTargets(int thr, int turn)
   float left  = f + s;
   float right = f - s;
 
-  tgtL = (int)(left  * speedLimit);
-  tgtR = (int)(right * speedLimit);
+  tgtL = (int)(left  * 255);
+  tgtR = (int)(right * 255);
 }
 
 
@@ -117,10 +91,9 @@ void onRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
   int sy = (int)p.y - 2048;
   sy = -sy;
 
-  turnCmd = applyDeadbandExpo(sx, joyDeadband, joyExpo);
-  throttleCmd = applyDeadbandExpo(sy, joyDeadband, joyExpo);
+  turnCmd     = constrain((int)(sx * 255.0f / 2048.0f), -255, 255);
+  throttleCmd = constrain((int)(sy * 255.0f / 2048.0f), -255, 255);
 
-  buttonCmd = p.button;
   lastJoyMs = millis();
 }
 
@@ -147,17 +120,6 @@ void setup() {
 // ================= Loop =================
 void loop() {
   uint32_t now = millis();
-
-  // --- SPEED BUTTON EDGE DETECT ---
-  if (buttonCmd && !lastButtonState) {
-    speedIndex++;
-    if (speedIndex >= NUM_SPEEDS) speedIndex = 0;
-    speedLimit = speedLevels[speedIndex];
-
-    Serial.print("Speed Level -> ");
-    Serial.println(speedLimit);
-  }
-  lastButtonState = buttonCmd;
 
   // --- Motion ---
   if (now - lastJoyMs > JOY_TIMEOUT_MS) {
