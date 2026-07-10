@@ -1,6 +1,6 @@
 Robot Platform 🛠️
 
-![R5D2 front and back](r5d2.jpg)
+![robot with trailer](robot_with_trailer.jpg)
 
 Modular ESP32-based robot platform for outdoor navigation, motor control, and sensor integration.
 
