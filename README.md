@@ -8,7 +8,7 @@ This is a human-scale, differential-drive utility robot designed to move comfort
 
 I chose 10-inch pneumatic tires so the robot can handle sidewalks, ramps, and grass reliably without suspension. The motors, gearboxes, and battery come from ride-on toys—they're inexpensive, readily available, and deliver excellent torque at low speeds.
 
-The robot is controlled by an ESP32. The ESP32 uses ESPNOW to communicate with a manual joystick, or an onboard computer. This allows the user to switch from 'auto' to 'manual' without touching any cords.
+The robot is controlled by an ESP32. The ESP32 uses ESPNOW to communicate with a manual joystick, or a computer. This allows the user to switch from 'auto' to 'manual' without touching any cords.
 
 🔧 Technical Snapshot
 
