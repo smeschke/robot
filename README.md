@@ -1,7 +1,5 @@
 Robot Platform 🛠️
 
-[!robot](robot.jpg)
-
 Modular ESP32-based robot platform for outdoor navigation, motor control, and sensor integration.
 
 This is a human-scale, differential-drive utility robot designed to move comfortably through real-world, ADA-compliant spaces at walking speed.
