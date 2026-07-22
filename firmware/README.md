@@ -1,6 +1,6 @@
 # Firmware ⚡
 
-Arduino sketches for every ESP32 in the system — two controllers, two boards on the robot. All of it is plain Arduino with no libraries beyond `esp_now.h` (plus a display library for the dual stick's screen). Everything talks ESP-NOW on channel 1, no encryption, packet types distinguished purely by length.
+Arduino sketches for every ESP32 in the system — a sketch for each of the controllers, and a sketch for each of the boards on the robot. All of it is plain Arduino with no libraries beyond `esp_now.h` (plus a display library for the dual stick's screen). Everything talks ESP-NOW on channel 1, no encryption, packet types distinguished purely by length.
 
 ## Sketches
 
