@@ -1,46 +1,60 @@
-// ===== Joystick Sender: ESP-NOW with Speed Button =====
+// ===== Single Analog Stick Controller: ESP-NOW, Arcade-Drive Mixing =====
+//
+// Replaces single_analog_stick_espnow.ino. That version sent raw joystick
+// x/y and let the receiver do arcade-drive mixing; the receiver
+// (motor_receiver.ino) no longer mixes -- it just ramps and applies
+// whatever left/right PWM it's handed. So the mixing has moved here: this
+// sketch reads the stick, computes left/right motor PWM itself, and sends
+// a DrivePacket{left, right} straight to motor_receiver.ino.
+//
+// Pin mapping confirmed via single_analog_stick_debug.ino:
+//   joyX (pin 34): 0 = left,     4095 = right
+//   joyY (pin 35): 0 = backward, 4095 = forward
+//   switch (pin 33): joystick's built-in click button
+
 #include <WiFi.h>
 #include <esp_now.h>
 
-uint8_t robotMac[] = {0xC0, 0xCD, 0xD6, 0xCA, 0x0E, 0x4C};
+// uint8_t robotMac[] = {0xC0, 0xCD, 0xD6, 0xCA, 0x0E, 0x4C};
+uint8_t robotMac[] = {0xD4, 0xE9, 0xF4, 0xE5, 0xF6, 0x58};
 
-const int joyX        = 34;
-const int joyY        = 35;
-const int buttonPin   = 32;  // joystick button — cycles speed
+// const int joyX      = 35;
+// const int joyY      = 34;
+const int joyX      = 34;
+const int joyY      = 35;
+const int switchPin = 33;  // joystick click button -- cycles speed
 
-const uint32_t SEND_INTERVAL_MS   = 5;
-const uint32_t DEBOUNCE_MS        = 50;
-const int      JOY_DEADBAND       = 40;
+const uint32_t SEND_INTERVAL_MS = 5;
+const uint32_t DEBOUNCE_MS      = 50;
+const int      JOY_DEADBAND     = 40;  // raw ADC counts, out of a ~2048 half-range
 
 typedef struct __attribute__((packed)) {
-  uint16_t x;
-  uint16_t y;
-  uint32_t seq;
-  uint32_t ms;
-} JoyPacket;
+  int16_t left;   // -255..255
+  int16_t right;  // -255..255
+} DrivePacket;
 
-JoyPacket pkt{};
+DrivePacket pkt{};
 uint32_t lastSend = 0;
 
 int centerX = 2048;
 int centerY = 2048;
 
 // Speed levels: 25%, 50%, 75%, 100%
-const float speedLevels[]  = {0.25f, 0.50f, 0.75f, 1.00f};
-const char* speedNames[]   = {"25%", "50%", "75%", "FULL"};
-const int numLevels        = 4;
-int speedIndex             = 0;  // start at 25%
+const float speedLevels[] = {0.25f, 0.50f, 0.75f, 1.00f};
+const char* speedNames[]  = {"25%", "50%", "75%", "FULL"};
+const int numLevels       = 4;
+int speedIndex            = 0;  // start at 25%
 
-bool lastSpeedBtn          = HIGH;
-bool stableBtn             = HIGH;
-uint32_t lastDebounce      = 0;
+bool lastSpeedBtn     = HIGH;
+bool stableBtn        = HIGH;
+uint32_t lastDebounce = 0;
 
 void setup() {
   Serial.begin(115200);
 
   pinMode(joyX,      INPUT);
   pinMode(joyY,      INPUT);
-  pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(switchPin, INPUT_PULLUP);
 
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
@@ -65,7 +79,7 @@ void loop() {
   uint32_t now = millis();
 
   // --- Joystick button cycles speed (active LOW, debounced) ---
-  bool reading = digitalRead(buttonPin);
+  bool reading = digitalRead(switchPin);
   if (reading != lastSpeedBtn) {
     lastDebounce = now;
   }
@@ -80,22 +94,30 @@ void loop() {
     stableBtn = reading;
   }
 
-  // --- Send packet ---
+  // --- Read, mix, send ---
   if (now - lastSend >= SEND_INTERVAL_MS) {
     lastSend = now;
 
+    int dx = analogRead(joyX) - centerX;  // + = right
+    int dy = analogRead(joyY) - centerY;  // + = forward
+    if (abs(dx) <= JOY_DEADBAND) dx = 0;
+    if (abs(dy) <= JOY_DEADBAND) dy = 0;
+
+    float turn     = constrain(dx / 2048.0f, -1.0f, 1.0f);
+    float throttle = constrain(dy / 2048.0f, -1.0f, 1.0f);
+
+    // Arcade-drive mixing.
+    float left  = throttle + turn;
+    float right = throttle - turn;
+
+    // Preserve the throttle/turn ratio instead of clipping it.
+    float mag = max(1.0f, max(fabsf(left), fabsf(right)));
+    left  /= mag;
+    right /= mag;
+
     float scale = speedLevels[speedIndex];
-
-    int rawX = -(analogRead(joyX) - centerX);
-    int rawY = -(analogRead(joyY) - centerY);
-    if (abs(rawX) <= JOY_DEADBAND) rawX = 0;
-    if (abs(rawY) <= JOY_DEADBAND) rawY = 0;
-
-    pkt.x = (uint16_t)constrain((int)(rawX * scale) + 2048, 0, 4095);
-    pkt.y = (uint16_t)constrain((int)(rawY * scale) + 2048, 0, 4095);
-
-    pkt.seq++;
-    pkt.ms = now;
+    pkt.left  = (int16_t)constrain((int)(left  * scale * 255), -255, 255);
+    pkt.right = (int16_t)constrain((int)(right * scale * 255), -255, 255);
 
     esp_now_send(robotMac, (uint8_t*)&pkt, sizeof(pkt));
   }
