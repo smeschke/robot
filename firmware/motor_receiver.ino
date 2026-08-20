@@ -1,4 +1,4 @@
-// ===== R5D2 Robot: Motor Receiver (ESP-NOW) =====
+// ===== R5D2 Robot: Motor Receiver (ESP-NOW, LEDC PWM) =====
 //
 // Wire format: DrivePacket{left, right} -- signed PWM per side, -255..255.
 // Works with either a human joystick remote (which does its own arcade-
@@ -6,23 +6,39 @@
 // (which can send raw left/right values directly). This receiver does no
 // mixing -- it only ramps toward the commanded values (to protect the
 // gearboxes from instant direction reversals) and writes PWM to the
-// motors. Stopping is just PWM 0; the motors' gear reduction holds them,
-// so no active braking is needed.
+// motors via the ESP32 LEDC peripheral. Stopping is just PWM 0; the
+// motors' gear reduction holds them, so no active braking is needed.
 
 #include <WiFi.h>
 #include <esp_now.h>
 
 // ================= Motor pins =================
 
+// #define FL_LPWM 33
+// #define FL_RPWM 25
+// #define BL_LPWM 26
+// #define BL_RPWM 32
+//#define FL_LPWM 33
+//#define FL_RPWM 32
+//#define BL_LPWM 25
+//#define BL_RPWM 26
+//#define FR_LPWM 14
+//#define FR_RPWM 27
+//#define BR_LPWM 18
+//#define BR_RPWM 19
 
-#define FL_LPWM 14
-#define FL_RPWM 27
-#define BL_LPWM 33
-#define BL_RPWM 32
-#define BR_LPWM 26
+#define FL_RPWM 16
+#define FL_LPWM 17
+#define BL_RPWM 18
+#define BL_LPWM 19
+#define FR_RPWM 32
+#define FR_LPWM 33
 #define BR_RPWM 25
-#define FR_LPWM 18
-#define FR_RPWM 19
+#define BR_LPWM 26
+
+// ================= LEDC settings =================
+const int LEDC_FREQ_HZ  = 20000; // above audible range
+const int LEDC_RES_BITS = 8;     // 0..255 duty, matches PWM range below
 
 // ================= Settings =================
 const int      RAMP_STEP      = 1;   // max PWM change per ramp tick
@@ -46,19 +62,19 @@ void setAll(int l, int r) {
   r = constrain(r, -255, 255);
 
   if (l >= 0) {
-    analogWrite(FL_LPWM, l); analogWrite(FL_RPWM, 0);
-    analogWrite(BL_LPWM, l); analogWrite(BL_RPWM, 0);
+    ledcWrite(FL_LPWM, l); ledcWrite(FL_RPWM, 0);
+    ledcWrite(BL_LPWM, l); ledcWrite(BL_RPWM, 0);
   } else {
-    analogWrite(FL_LPWM, 0); analogWrite(FL_RPWM, -l);
-    analogWrite(BL_LPWM, 0); analogWrite(BL_RPWM, -l);
+    ledcWrite(FL_LPWM, 0); ledcWrite(FL_RPWM, -l);
+    ledcWrite(BL_LPWM, 0); ledcWrite(BL_RPWM, -l);
   }
 
   if (r >= 0) {
-    analogWrite(FR_LPWM, r); analogWrite(FR_RPWM, 0);
-    analogWrite(BR_LPWM, r); analogWrite(BR_RPWM, 0);
+    ledcWrite(FR_LPWM, r); ledcWrite(FR_RPWM, 0);
+    ledcWrite(BR_LPWM, r); ledcWrite(BR_RPWM, 0);
   } else {
-    analogWrite(FR_LPWM, 0); analogWrite(FR_RPWM, -r);
-    analogWrite(BR_LPWM, 0); analogWrite(BR_RPWM, -r);
+    ledcWrite(FR_LPWM, 0); ledcWrite(FR_RPWM, -r);
+    ledcWrite(BR_LPWM, 0); ledcWrite(BR_RPWM, -r);
   }
 }
 
@@ -78,10 +94,14 @@ void onRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
 void setup() {
   Serial.begin(115200);
 
-  pinMode(FL_LPWM, OUTPUT); pinMode(FL_RPWM, OUTPUT);
-  pinMode(BL_LPWM, OUTPUT); pinMode(BL_RPWM, OUTPUT);
-  pinMode(FR_LPWM, OUTPUT); pinMode(FR_RPWM, OUTPUT);
-  pinMode(BR_LPWM, OUTPUT); pinMode(BR_RPWM, OUTPUT);
+  ledcAttach(FL_LPWM, LEDC_FREQ_HZ, LEDC_RES_BITS);
+  ledcAttach(FL_RPWM, LEDC_FREQ_HZ, LEDC_RES_BITS);
+  ledcAttach(BL_LPWM, LEDC_FREQ_HZ, LEDC_RES_BITS);
+  ledcAttach(BL_RPWM, LEDC_FREQ_HZ, LEDC_RES_BITS);
+  ledcAttach(FR_LPWM, LEDC_FREQ_HZ, LEDC_RES_BITS);
+  ledcAttach(FR_RPWM, LEDC_FREQ_HZ, LEDC_RES_BITS);
+  ledcAttach(BR_LPWM, LEDC_FREQ_HZ, LEDC_RES_BITS);
+  ledcAttach(BR_RPWM, LEDC_FREQ_HZ, LEDC_RES_BITS);
 
   setAll(0, 0);
 
