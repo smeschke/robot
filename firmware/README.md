@@ -6,10 +6,9 @@ Arduino sketches for every ESP32 in the system — a sketch for each of the cont
 
 | Sketch | Flashes onto | Does |
 |---|---|---|
-| [`single_analog_stick_espnow.ino`](single_analog_stick_espnow.ino) | single stick controller | Streams drive packets every 5 ms; stick click cycles the speed cap 25/50/75/100% |
-| [`dual_analog_stick.ino`](dual_analog_stick.ino) | dual stick controller | Left stick streams drive, right stick flicks light commands, screen renders the robot heartbeat as a HUD |
-| [`skidsteer_espnow.ino`](skidsteer_espnow.ino) | robot — motor board | Arcade-mixed skid steer on four BTS7960 channels, with ramping and a 300 ms fail-safe stop |
-| [`relay_receiver.ino`](relay_receiver.ino) | robot — relay board | Latched headlights + momentary turn signals on two relays; sends the heartbeat back |
+| [`single_analog_stick_espnow.ino`](single_analog_stick_espnow.ino) | single stick controller | Streams drive packets every 5 ms |
+| [`skidsteer_espnow.ino`](motor_receiver.ino) | robot — motor board | Arcade-mixed skid steer on four BTS7960 channels, with ramping and a 300 ms fail-safe stop |
+
 
 ## Setup
 
